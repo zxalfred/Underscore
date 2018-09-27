@@ -35,7 +35,8 @@ module.exports = {
       "consistent-return": [0],
       "space-before-function-paren": [0],
       "no-void": [0],
-      "default-case": [0]
+      "default-case": [0],
+      "prefer-destructuring": [0]
     }
   }
   
