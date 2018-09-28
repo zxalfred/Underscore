@@ -102,12 +102,12 @@
       if (length < 2 || obj == null) return obj;
 
       // 枚举第一个参数除外的对象参数
-      for (let index = 1; index < length; index += 1) {
+      for (let index = 1; index < length; index++) {
         const source = arguments[index];
         const keys = keysFunc(source);
         const l = keys.length;
 
-        for (let i = 0; i < l; i += 1) {
+        for (let i = 0; i < l; i++) {
           const key = keys[i];
           if (!undefinedOnly || obj[key] === void 0) {
             obj[key] = source[key];
@@ -150,5 +150,173 @@
   const isArrayLike = function(collection) {
     const length = getLength(collection);
     return typeof length === 'number' && length >= 0 && length <= MAX_ARRAY_INDEX;
+  };
+
+  // 数组和对象的扩展方法
+
+  // 与 ES5 中 Array.prototype.forEach 类似
+  // 第一个参数为数组、类数组或对象
+  // 第二个参数为迭代方法，为每个元素执行该方法
+  // 该方法能传入三个参数(item, index, array) or (value, key, obj) for object
+  // 与 Array.prototype.forEach 方法传参格式一致
+  // 第三个可选参数确定迭代方法中的 this 指向
+  // 注意: 不要传入 key 为 number 的对象
+  // 不能用 return 跳出循环
+  _.each = _.forEach = function(obj, iteratee, context) {
+    iteratee = optimizeCb(iteratee, context);
+
+    if (isArrayLike(obj)) {
+      for (let i = 0; i < obj.length; i++) {
+        iteratee(obj[i], i, obj);
+      }
+    } else {
+      const keys = _.keys(obj);
+
+      for (let i = 0; i < keys.length; i++) {
+        iteratee(obj[keys[i]], keys[i], obj);
+      }
+    }
+    // 返回 obj 以供链式调用
+    return obj;
+  };
+
+  // 与 map 类似,遍历集合的每个元素
+  // 执行 iteratee 将结果保存在新数组中并返回
+  _.map = _.collect = function(obj, iteratee, context) {
+    iteratee = cb(iteratee, context);
+
+    const keys = !isArrayLike(obj) && _.keys(obj);
+    const length = (keys || obj).length;
+    const results = Array(length);
+
+    for (let index = 0; index < length; index++) {
+      const currentKey = keys ? keys[index] : index;
+      results[index] = iteratee(obj[currentKey], currentKey, obj);
+    }
+
+    return results;
+  };
+
+  // 生成 reducing 函数,dir 指定从左到右或相反
+  function createReduce(dir) {
+    function iterator(obj, iteratee, memo, keys, index, length) {
+      for (; index >= 0 && index < length; index += dir) {
+        const currentKey = keys ? keys[index] : index;
+        memo = iteratee(memo, obj[currentKey], currentKey, obj);
+      }
+      return memo;
+    }
+
+    return function(obj, iteratee, memo, context) {
+      iteratee = optimizeCb(iteratee, memo, context);
+
+      const keys = !isArrayLike(obj) && _.keys(obj);
+      const length = (keys || obj).length;
+      let index = dir > 0 ? 0 : length - 1;
+
+      // 如果没有指定初始值,则把第一个元素指定为初始值
+      if (arguments.length < 3) {
+        memo = obj[keys ? keys[index] : index];
+        index += dir;
+      }
+      return iterator(obj, iteratee, memo, keys, index, length);
+    };
+  }
+
+  // 累加器
+  _.reduce = _.foldl = _.inject = createReduce(1);
+
+  // 从尾到首的累加器
+  _.reduceRight = _.foldr = createReduce(-1);
+
+  // 寻找集合中第一个满足条件的元素,并返回元素值
+  _.find = _.detect = function(obj, predicate, context) {
+    let key;
+    if (isArrayLike(obj)) {
+      key = _.findIndex(obj, predicate, context);
+    } else {
+      key = _.findKey(obj, predicate, context);
+    }
+    if (key !== void 0 && key !== -1) return obj[key];
+  };
+
+  // 寻找满足条件的元素
+  _.filter = _.select = function(obj, predicate, context) {
+    const results = [];
+
+    predicate = cb(predicate, context);
+    _.each(obj, (value, index, list) => {
+      if (predicate(value, index, list)) results.push(value);
+    });
+  };
+
+  // 寻找不满足条件的元素
+  _.reject = function(obj, predicate, context) {
+    return _.filter(obj, _.negate(cb(predicate)), context);
+  };
+
+  // 集合中的每个元素是否满足条件
+  _.every = _.all = function(obj, predicate, context) {
+    predicate = cb(predicate, context);
+
+    const keys = !isArrayLike(obj) && _.keys(obj);
+    const length = (keys || obj).length;
+
+    for (let index = 0; index < length; index++) {
+      const currentKey = keys ? keys[index] : index;
+      if (!predicate(obj[currentKey], currentKey, obj)) return false;
+    }
+    return true;
+  };
+
+  // 集合中是否有一个元素满足条件
+  _.some = _.any = function(obj, predicate, context) {
+    predicate = cb(predicate, context);
+
+    const keys = !isArrayLike(obj) && _.keys(obj);
+    const length = (keys || obj).length;
+
+    for (let index = 0; index < length; index++) {
+      const currentKey = keys ? keys[index] : index;
+      if (predicate(obj[currentKey], currentKey, obj)) return true;
+    }
+    return false;
+  };
+
+  // 集合中是否有指定值
+  _.contains = _.includes = function(obj, item, fromIndex, guard) {
+    if (!isArrayLike(obj)) obj = _.values(obj);
+
+    if (typeof fromIndex !== 'number' || guard) fromIndex = 0;
+
+    return _.indexOf(obj, item, fromIndex) >= 0;
+  };
+
+  // 对集合中每个元素调用方法，返回调用的结果
+  // method 参数后的参数会当做参数传入 method 方法
+  _.invoke = function(obj, method, ...rest) {
+    const args = slice.call(rest, 2);
+    const isFunc = _.isFunction(method);
+
+    return _.map(obj, (value) => {
+      const func = isFunc ? method : value[method];
+      return !func ? func : func.apply(value, args);
+    });
+  };
+
+  // 一个元素都是对象的数组
+  // 根据指定的 key 返回一个数组,元素都是指定 key 的 value 值
+  _.pluck = function(obj, key) {
+    return _.map(obj, _.property(key));
+  };
+
+  // 用是否有指定键值对筛选
+  _.where = function(obj, attrs) {
+    return _.filter(obj, _.matcher(attrs));
+  };
+
+  // 寻找第一个有指定键值对的对象
+  _.findWhere = function(obj, attrs) {
+    return _.find(obj, _.matcher(attrs));
   };
 }

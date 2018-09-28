@@ -36,7 +36,9 @@ module.exports = {
       "space-before-function-paren": [0],
       "no-void": [0],
       "default-case": [0],
-      "prefer-destructuring": [0]
+      "prefer-destructuring": [0],
+      "no-multi-assign": [0],
+      "no-plusplus": [0]
     }
   }
   
