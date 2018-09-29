@@ -96,25 +96,25 @@
   // _.extendOwn = _.assign = createAssigner(_.keys);
   // _.defaults = createAssigner(_.allKeys, true);
   const createAssigner = function(keysFunc, undefinedOnly) {
-    return function(obj) {
-      const length = arguments.length;
-      // 传入 0~1 个参数时
-      if (length < 2 || obj == null) return obj;
-
+    return function(...items) {
+      const length = items.length;
+      // 传入0个和1个参数时
+      if (length === 1) return items[0];
+      if (length === 0) return {};
       // 枚举第一个参数除外的对象参数
       for (let index = 1; index < length; index++) {
-        const source = arguments[index];
+        const source = items[index];
         const keys = keysFunc(source);
         const l = keys.length;
 
         for (let i = 0; i < l; i++) {
           const key = keys[i];
-          if (!undefinedOnly || obj[key] === void 0) {
-            obj[key] = source[key];
+          if (!undefinedOnly || items[0][key] === void 0) {
+            items[0][key] = source[key];
           }
         }
       }
-      return obj;
+      return items[0];
     };
   };
 
@@ -152,7 +152,7 @@
     return typeof length === 'number' && length >= 0 && length <= MAX_ARRAY_INDEX;
   };
 
-  // 数组和对象的扩展方法
+  // 集合的扩展方法
 
   // 与 ES5 中 Array.prototype.forEach 类似
   // 第一个参数为数组、类数组或对象
@@ -318,5 +318,191 @@
   // 寻找第一个有指定键值对的对象
   _.findWhere = function(obj, attrs) {
     return _.find(obj, _.matcher(attrs));
+  };
+
+  // 寻找最大的元素
+  // 如果有 iteratee 参数，则求每个元素经过该函数迭代后的值
+  _.max = function(obj, iteratee, context) {
+    let result = -Infinity;
+    let lastComputed = -Infinity;
+    let value;
+    let computed;
+
+    if (!iteratee && obj) {
+      obj = isArrayLike(obj) ? obj : _.values(obj);
+
+      for (let i = 0; i < obj.length; i++) {
+        value = obj[i];
+        if (value > result) {
+          result = value;
+        }
+      }
+    } else {
+      iteratee = cb(iteratee, context);
+
+      _.each(obj, (item, index, list) => {
+        computed = iteratee(item, index, list);
+        // 最后一个判断表示 result 未经修改
+        // 即 result 是第一个满足计算结果负无穷大的值
+        if (computed > lastComputed || (computed === -Infinity && result === -Infinity)) {
+          result = item;
+          lastComputed = computed;
+        }
+      });
+    }
+
+    return result;
+  };
+
+  // 寻找最小的元素
+  _.min = function(obj, iteratee, context) {
+    let result = Infinity;
+    let lastComputed = Infinity;
+    let value;
+    let computed;
+
+    if (!iteratee && obj) {
+      obj = isArrayLike(obj) ? obj : _.values(obj);
+
+      for (let i = 0; i < obj.length; i++) {
+        value = obj[i];
+        if (value < result) {
+          result = value;
+        }
+      }
+    } else {
+      iteratee = cb(iteratee, context);
+
+      _.each(obj, (item, index, list) => {
+        computed = iteratee(item, index, list);
+        if (computed < lastComputed || (computed === Infinity && result === Infinity)) {
+          result = value;
+          lastComputed = computed;
+        }
+      });
+    }
+
+    return result;
+  };
+
+  // 将集合乱序排列
+  // 使用 Fisher-Yates shuffle 算法
+  // 最优洗牌算法,复杂度 O(n)
+  _.shuffle = function(obj) {
+    // 如果是对象,则对 vavlue 值进行排序
+    const set = isArrayLike(obj) ? obj : _.values(obj);
+    const length = set.length;
+    const shuffled = Array(length);
+
+    for (let index = 0; index < length; index++) {
+      const rand = _.random(0, index);
+      // 将当前的元素随机与之前的元素交换位置
+      if (rand !== index) shuffled[index] = shuffled[rand];
+      shuffled[rand] = set[index];
+    }
+
+    return shuffled;
+  };
+
+  // 随机返回一个集合中的元素
+  // 如果指定了参数 n 则返回 n 个元素组成的数组
+  // 如果参数是对象,则数组由 values 组成
+  _.sample = function(obj, n, guard) {
+    if (!n || guard) {
+      if (!isArrayLike(obj)) obj = _.values(obj);
+      return obj[_.random(obj.length - 1)];
+    }
+
+    return _.shuffle(obj).slice(0, Math.max(0, n));
+  };
+
+  // 根据 iteratee 的标准对集合的 value 进行排序
+  _.sortBy = function(obj, iteratee, context) {
+    iteratee = cb(iteratee, context);
+
+    return _.pluck(_.map(obj, (value, index, list) => ({
+      value,
+      index,
+      criteria: iteratee(value, index, list),
+    })).sort((left, right) => {
+      const a = left.criteria;
+      const b = right.criteria;
+      if (a !== b) {
+        if (a > b || a === void 0) return 1;
+        if (a < b || b === void 0) return -1;
+      }
+      return left.index - right.index;
+    }), 'value');
+  };
+
+  // behavior 为函数参数,作为分类规则
+  // _.groupBy, _.indexBy, _.countBy 都是对数组元素进行分类
+  const group = function(behavior) {
+    return function(obj, iteratee, context) {
+      const result = {};
+      iteratee = cb(iteratee, context);
+      _.each(obj, (value, index) => {
+        const key = iteratee(value, index, obj);
+        behavior(result, value, key);
+      });
+      return result;
+    };
+  };
+
+  // 根据特定规则或对象中的元素进行分组
+  _.groupBy = group((result, value, key) => {
+    if (_.has(result, key)) result[key].push(value);
+    else result[key] = [value];
+  });
+
+  // 类似 groupBy 但每个组的值是唯一的
+  _.indexBy = group((result, value, key) => {
+    result[key] = value;
+  });
+
+  // 分组计数
+  _.countBy = group((result, value, key) => {
+    if (_.has(result, key)) result[key]++;
+    else result[key] = 1;
+  });
+
+  // 将输入转化为数组
+  // 类似 Array.from
+  _.toArray = function(obj) {
+    if (!obj) return [];
+
+    // 如果是数组，返回一个副本
+    // 也可以用 concat 或 ES6 数组扩展运算符
+    if (_.isArray(obj)) return slice.call(obj);
+
+    // 如果是类数组,则重新构造数组
+    // 似乎也可以用 slice 方法
+    if (isArrayLike(obj)) return _.map(obj, _.identity);
+
+    // 如果是对象,返回 values 集合
+    if (_.isObject(obj)) return _.values(obj);
+
+    return Array.from(obj);
+  };
+
+  // 返回集合长度
+  _.size = function(obj) {
+    if (!obj) return 0;
+    return isArrayLike(obj) ? obj.length : _.keys(obj).length;
+  };
+
+  // 将集合中符合条件 predicate 的元素
+  // 和不符合条件的元素
+  // 分别放入两个数组中
+  // 返回一个数组,元素为以上两个数组
+  _.partition = function(obj, predicate, context) {
+    predicate = cb(predicate, context);
+
+    const pass = [];
+    const fail = [];
+    _.each(obj, (value, key, rowObj) => {
+      (predicate(value, key, rowObj) ? pass : fail).push(value);
+    });
+    return [pass, fail];
   };
 }
