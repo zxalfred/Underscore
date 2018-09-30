@@ -304,7 +304,6 @@
     });
   };
 
-  // 一个元素都是对象的数组
   // 根据指定的 key 返回一个数组,元素都是指定 key 的 value 值
   _.pluck = function(obj, key) {
     return _.map(obj, _.property(key));
@@ -504,5 +503,292 @@
       (predicate(value, key, rowObj) ? pass : fail).push(value);
     });
     return [pass, fail];
+  };
+
+  // 数组的扩展方法
+
+  // 返回数组的第一个元素
+  // 若有参数 n 则返回前 n 个元素组成的数组
+  _.first = _.head = _.take = function(array, n, guard) {
+    if (!array) return void 0;
+
+    if (!n || guard) return array[0];
+
+    return _.initial(array, array.length - n);
+  };
+
+  // 传入一个数组
+  // 返回剔除最后一个元素之后的数组副本
+  // 如果传入参数 n,则剔除最后 n 个元素
+  _.initial = function(array, n, guard) {
+    return slice.call(array, 0, Math.max(0, array.length - (!n || guard ? 1 : n)));
+  };
+
+  // 返回数组最后一个元素
+  // 若有参数 n 则返回后 n 个元素组成的数组
+  _.last = function(array, n, guard) {
+    if (array == null) return void 0;
+
+    if (!n || guard) return array[array.length - 1];
+
+    return _.rest(array, Math.max(0, array.length - n));
+  };
+
+  // 传入一个数组
+  // 返回剔除第一个元素后的数组副本
+  // 如果传入参数 n,则剔除前 n 个元素
+  _.rest = _.tail = _.drop = function(array, n, guard) {
+    return slice.call(array, !n || guard ? 1 : n);
+  };
+
+  // 去掉数组中的所用 falsy 值
+  _.compact = function(array) {
+    return _.filter(array, _.identity);
+  };
+
+  // 递归调用数组,将数组展开
+  const flatten = function(input, shallow, strict, startIndex) {
+    const output = [];
+    const length = getLength(input);
+    let idx = 0;
+
+    for (let i = startIndex || 0; i < length; i++) {
+      let value = input[i];
+
+      if ((isArrayLike(value) && (_.isArray(value))) || _.isArguments(value)) {
+        if (!shallow) value = flatten(value, shallow, strict);
+
+        const len = value.length;
+        let j = 0;
+
+        output.length += len;
+        while (j < len) {
+          output[idx++] = value[j++];
+        }
+      } else if (!strict) {
+        output[idx++] = value;
+      }
+    }
+    return output;
+  };
+
+  // 将嵌套数组展开
+  // 如果 shallow 为 true,则只展开一层
+  _.flatten = function(array, shallow) {
+    return flatten(array, shallow, false);
+  };
+
+  // 移除数组中的指定元素
+  // 返回移除后的数组副本
+  _.without = function(array, ...rest) {
+    return _.difference(array, rest);
+  };
+
+  // 数组去重
+  _.uniq = _.unique = function(array, isSorted, iteratee, context) {
+    if (!_.isBoolean(isSorted)) {
+      context = iteratee;
+      iteratee = isSorted;
+      isSorted = false;
+    }
+
+    if (iteratee) iteratee = cb(iteratee, context);
+
+    const result = [];
+
+    // 已经出现过的元素,用来过滤重复值
+    let seen = [];
+    const length = getLength(array);
+
+    for (let i = 0; i < length; i++) {
+      const value = array[i];
+      const computed = iteratee ? iteratee(value, i, array) : value;
+
+      if (isSorted) {
+        if (!i || seen !== computed) result.push(value);
+        seen = computed;
+      } else if (iteratee) {
+        if (!_.contains(seen, computed)) {
+          seen.push(computed);
+          result.push(value);
+        } else if (!_.contains(result, value)) {
+          result.push(value);
+        }
+      }
+    }
+
+    return result;
+  };
+
+  // 将多个数组的元素集中到一个数组中
+  // 并且去重,返回数组副本
+  _.union = function(...arrays) {
+    return _.uniq(flatten(arrays, true, true));
+  };
+
+  // 寻找几个数组元素的交集
+  // 存入新的数组并返回
+  _.intersection = function(array, ...rest) {
+    const result = [];
+    const argsLength = rest.length;
+
+    for (let i = 0; i < getLength(array); i++) {
+      const item = array[i];
+
+      if (!_.contains(result, item)) {
+        let j = 0;
+
+        for (j; j < argsLength; j++) {
+          if (!_.contains(rest[j], item)) break;
+        }
+
+        if (j === argsLength) result.push(item);
+      }
+    }
+
+    return result;
+  };
+
+  // 剔除 array 数组中在 others 数组中出现的元素
+  _.difference = function(array, ...rest) {
+    rest = flatten(rest, true, true);
+
+    return _.filter(array, value => !_.contains(rest, value));
+  };
+
+  // 将多个数组中相同位置的元素归类
+  _.zip = function(...arrays) {
+    return _.unzip(arrays);
+  };
+
+  _.unzip = function(array) {
+    const length = (array && _.max(array, getLength).length) || 0;
+    const result = Array(length);
+
+    for (let index = 0; index < length; index++) {
+      result[index] = _.pluck(array, index);
+    }
+
+    return result;
+  };
+
+  // 将数组转化为对象
+  _.object = function(list, values) {
+    const result = {};
+    const length = getLength(list);
+
+    for (let i = 0; i < length; i++) {
+      if (values) {
+        result[list[i]] = values[i];
+      } else {
+        result[list[i][0]] = list[i][1];
+      }
+    }
+    return result;
+  };
+
+  // 寻找 index 的辅助函数
+  function createPredicateIndexFinder(dir) {
+    return function(array, predicate, context) {
+      predicate = cb(predicate, context);
+
+      const length = getLength(array);
+      let index = dir > 0 ? 0 : length - 1;
+
+      for (; index >= 0 && index < length; index += dir) {
+        if (predicate(array[index], index, array)) { return index; }
+      }
+
+      return -1;
+    };
+  }
+
+  // 从前往后找
+  _.findIndex = createPredicateIndexFinder(1);
+
+  // 从后往前找
+  _.findLastIndex = createPredicateIndexFinder(-1);
+
+  // 将一个元素插入已排序的数组
+  // 返回插入位置的下标
+  // 二分法
+  _.sortedIndex = function(array, obj, iteratee, context) {
+    iteratee = cb(iteratee, context, 1);
+
+    const value = iteratee(obj);
+    let low = 0;
+    let high = getLength(array);
+
+    while (low < high) {
+      const mid = Math.floor((low + high) / 2);
+      if (iteratee(array[mid] < value)) {
+        low = mid + 1;
+      } else {
+        high = mid;
+      }
+    }
+
+    return low;
+  };
+
+  // 生成 indexOf 和 lastIndexOf 函数的工具函数
+  function createIndexFinder(dir, predicateFind, sortedIndex) {
+    return function(array, item, idx) {
+      let i = 0;
+      let length = getLength(array);
+
+      if (typeof idx === 'number') {
+        if (dir > 0) {
+          i = idx >= 0 ? idx : Math.max(idx + length, i);
+        } else {
+          length = idx >= 0 ? Math.min(idx + 1, length) : idx + length + 1;
+        }
+      } else if (sortedIndex && idx && length) {
+        // 使用二分法
+        idx = sortedIndex(array, item);
+        return array[idx] === item ? idx : -1;
+      }
+
+      // 当查找的元素为 NaN
+      if (_.isNaN(item)) {
+        idx = predicateFind(slice.call(array, i, length), _.isNaN);
+        return array[idx] === item ? idx : -1;
+      }
+
+      for (idx = dir > 0 ? i : length - 1; idx >= 0 && idx < length; idx += dir) {
+        if (array[idx] === item) return idx;
+      }
+
+      return -1;
+    };
+  }
+
+  // 寻找元素位置
+  // 第三个参数为 true 指定数组已经排序
+  // 第三个参数为数字指定查找位置
+  _.indexOf = createIndexFinder(1, _.findIndex, _.sortedIndex);
+
+  // 从末尾寻找元素位置
+  // 第三个参数指定从倒数第几位查找
+  _.lastIndexOf = createIndexFinder(-1, _.findLastIndex);
+
+  // 返回一定范围内的数组成的数组
+  _.range = function(start, stop, step) {
+    if (!stop) {
+      stop = start || 0;
+      start = 0;
+    }
+
+    step = step || 1;
+
+    const length = Math.max(Math.ceil((stop - start) / step), 0);
+
+    const range = Array(length);
+
+    for (let idx = 0; idx < length; idx++, start += step) {
+      range[idx] = start;
+    }
+
+    return range;
   };
 }
