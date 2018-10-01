@@ -791,4 +791,75 @@
 
     return range;
   };
+
+  // 判断函数是否为 new 调用
+  const executeBound = function(sourceFunc, boundFunc, context, callingContext, args) {
+    // 非 new 调用 _.bind 返回的方法
+    // callingContext 不是 boundFunc 的一个实例
+    if (!(callingContext instanceof boundFunc)) {
+      return sourceFunc.apply(context, args);
+    }
+
+    const self = baseCreate(sourceFunc.prototype);
+    const result = sourceFunc.apply(self, args);
+
+    if (_.isObject(result)) return result;
+
+    return self;
+  };
+
+  // ES 5 bind 方法的扩展
+  // 可选的 arguments 参数会被当做 func 的参数传入
+  // func 在调用时,优先用 arguments 参数, 然后使用 _.bind 返回方法所传入的参数
+  _.bind = function(func, context, ...rest) {
+    // 如果支持 ES 5 bind 则使用
+    if (nativeBind && func.bind === nativeBind) {
+      return nativeBind.apply(func, [context, ...rest]);
+    }
+
+    if (!_.isFunction(func)) {
+      throw new TypeError('Bind nust be called on a function');
+    }
+
+    const bound = function(...args) {
+      return executeBound(func, bound, context, this, rest.concat(args));
+    };
+
+    return bound;
+  };
+
+  _.partial = function(func, ...boundArgs) {
+    const bound = function(...fillArgs) {
+      let position = 0;
+      const length = boundArgs.length;
+      const args = Array(length);
+      for (let i = 0; i < length; i++) {
+        args[i] = boundArgs[i] === _ ? fillArgs[position++] : boundArgs[i];
+      }
+
+      while (position < fillArgs.length) {
+        args.push(fillArgs[position++]);
+      }
+
+      return executeBound(func, bound, this, this, args);
+    };
+
+    return bound;
+  };
+
+  // 将 obj 中的指定方法的 this 指向 obj
+  _.bindAll = function(obj, ...methodNames) {
+    const length = methodNames.length;
+
+    if (methodNames < 1) {
+      throw new Error('bindAll must be passed function names');
+    }
+
+    for (let i = 0; i < length; i++) {
+      const key = methodNames[i];
+      obj[key] = _.bind(obj[key], obj);
+    }
+
+    return obj;
+  };
 }
