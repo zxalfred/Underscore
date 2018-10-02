@@ -38,7 +38,10 @@ module.exports = {
       "default-case": [0],
       "prefer-destructuring": [0],
       "no-multi-assign": [0],
-      "no-plusplus": [0]
+      "no-plusplus": [0],
+      "no-restricted-syntax": [0],
+      "guard-for-in": [0],
+      "prefer-rest-params": [0],
     }
   }
   

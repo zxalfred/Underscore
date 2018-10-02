@@ -166,13 +166,13 @@
     iteratee = optimizeCb(iteratee, context);
 
     if (isArrayLike(obj)) {
-      for (let i = 0; i < obj.length; i++) {
+      for (let i = 0, length = obj.length; i < length; i++) {
         iteratee(obj[i], i, obj);
       }
     } else {
       const keys = _.keys(obj);
 
-      for (let i = 0; i < keys.length; i++) {
+      for (let i = 0, length = keys.length; i < length; i++) {
         iteratee(obj[keys[i]], keys[i], obj);
       }
     }
@@ -330,7 +330,7 @@
     if (!iteratee && obj) {
       obj = isArrayLike(obj) ? obj : _.values(obj);
 
-      for (let i = 0; i < obj.length; i++) {
+      for (let i = 0, length = obj.length; i < length; i++) {
         value = obj[i];
         if (value > result) {
           result = value;
@@ -363,7 +363,7 @@
     if (!iteratee && obj) {
       obj = isArrayLike(obj) ? obj : _.values(obj);
 
-      for (let i = 0; i < obj.length; i++) {
+      for (let i = 0, length = obj.length; i < length; i++) {
         value = obj[i];
         if (value < result) {
           result = value;
@@ -632,7 +632,7 @@
     const result = [];
     const argsLength = rest.length;
 
-    for (let i = 0; i < getLength(array); i++) {
+    for (let i = 0, length = getLength(array); i < length; i++) {
       const item = array[i];
 
       if (!_.contains(result, item)) {
@@ -914,17 +914,15 @@
       previous = options.leading === false ? 0 : _.now();
       timeout = null;
       result = func.apply(context, args);
-      if (!timeout) {
-        args = null;
-        context = null;
-      }
+      args = null;
+      context = null;
     };
-    return function(...rest) {
+    return function(...oArgs) {
       const now = _.now;
       if (!previous && options.leading === false) previous = now;
       const remaining = wait - (now - previous);
       context = this;
-      args = rest;
+      args = oArgs;
       if (remaining < 0 || remaining > wait) {
         if (timeout) {
           clearTimeout(timeout);
@@ -932,12 +930,10 @@
         }
         previous = now;
         result = func.apply(context, args);
-        if (!timeout) {
-          args = null;
-          context = null;
-        } else if (!timeout && options.trailing !== false) {
-          timeout = setTimeout(later, remaining);
-        }
+        args = null;
+        context = null;
+      } else if (!timeout && options.trailing !== false) {
+        timeout = setTimeout(later, remaining);
       }
       return result;
     };
@@ -1045,4 +1041,224 @@
 
   // 在 IE < 9 下不能用 for...in 来枚举的 key
   const nonEnumerableProps = ['valueOf', 'isPrototypeOf', 'toString', 'propertyIsEnumerable', 'hasOwnProperty', 'toLocaleString'];
+
+  // obj 为需要遍历键值对的对象
+  // keys 为键数组
+  function collectNonEnumProps(obj, keys) {
+    let nonEnumIdx = nonEnumerableProps.length;
+    const constructor = obj.constructor;
+
+    const proto = (_.isFunction(constructor) && constructor.prototype) || ObjProto;
+
+    let prop = 'constructor';
+    if (_.has(obj, prop) && !_.contains(keys, prop)) keys.push(prop);
+
+    while (nonEnumIdx--) {
+      prop = nonEnumerableProps[nonEnumIdx];
+      if (prop in obj && obj[prop] !== proto[prop] && !_.contains(keys, prop)) {
+        keys.push(prop);
+      }
+    }
+  }
+
+  // own enumerable properties
+  _.keys = function(obj) {
+    if (!_.isObject(obj)) return [];
+
+    if (nativeKeys) return nativeKeys(obj);
+
+    const keys = [];
+
+    for (const key in obj) {
+      if (_.has(obj, key)) keys.push(key);
+    }
+
+    if (hasEnumBug) collectNonEnumProps(obj, keys);
+  };
+
+  // all enumerable properties including inherited
+  _.allKeys = function(obj) {
+    if (!_.isObject(obj)) return [];
+
+    if (nativeKeys) return nativeKeys(obj);
+
+    const keys = [];
+
+    for (const key in obj) {
+      keys.push(key);
+    }
+
+    if (hasEnumBug) collectNonEnumProps(obj, keys);
+  };
+
+  // 检索对象自身的所有可枚举 value 值
+  _.values = function(obj) {
+    const keys = _.keys(obj);
+    const length = keys.length;
+    const values = Array(length);
+    for (let i = 0; i < length; i++) {
+      values[i] = obj[keys[i]];
+    }
+    return values;
+  };
+
+  // 遍历对象的 value 返回对象副本
+  _.mapObject = function(obj, iteratee, context) {
+    iteratee = cb(iteratee, context);
+
+    const keys = _.keys(obj);
+    const length = keys.length;
+    const results = {};
+    let currentKey;
+
+    for (let index = 0; index < length; index++) {
+      currentKey = keys[index];
+      results[currentKey] = iteratee(obj[currentKey], currentKey, obj);
+    }
+  };
+
+  // 将对象转换为元素为 [key, value] 形式的数组
+  _.pairs = function(obj) {
+    const keys = _.keys(obj);
+    const length = keys.length;
+    const pairs = Array(length);
+    for (let i = 0; i < length; i++) {
+      pairs[i] = [keys[i], obj[keys[i]]];
+    }
+    return pairs;
+  };
+
+  // 将对象的 key-value 键值对颠倒
+  _.invert = function(obj) {
+    const result = {};
+    const keys = _.keys(obj);
+    for (let i = 0, length = keys.length; i < length; i++) {
+      result[obj[keys[i]]] = keys[i];
+    }
+    return result;
+  };
+
+  // 获取对象(包括原型链)中的所有方法
+  // 并将响应的 key 存入数组,排序后返回
+  _.functions = _.methods = function(obj) {
+    const names = [];
+
+    for (const key in obj) {
+      if (_.isFunction(obj[key])) names.push(key);
+    }
+
+    return names.sort();
+  };
+
+  // 扩展对象(用包含原型链上的属性)
+  _.extend = createAssigner(_.allKeys);
+
+  // 用自身的属性扩展对象
+  _.extendOwn = _.assign = createAssigner(_.keys);
+
+  // 找到第一个满足条件的键值对
+  // 并返回 key 值
+  _.findKey = function(obj, predicate, context) {
+    predicate = cb(predicate, context);
+    const keys = _.keys(obj);
+    let key;
+
+    for (let i = 0, length = keys.length; i < length; i++) {
+      key = keys[i];
+
+      if (predicate(obj[key], key, obj)) return key;
+    }
+  };
+
+  // 根据一定的需求（key 值，或者通过 predicate 函数返回真假）
+  // 返回拥有一定键值对的对象副本
+  // 第二个参数可以是一个 predicate 函数
+  _.pick = function(object, oiteratee, context) {
+    const result = {};
+    let obj = object;
+    let iteratee;
+    let keys;
+
+    if (!obj) return result;
+
+    // 如果第二个参数是函数
+    if (_.isFunction(oiteratee)) {
+      keys = _.allKeys(obj);
+      iteratee = optimizeCb(oiteratee, context);
+    } else {
+      keys = flatten(arguments, false, false, 1);
+      iteratee = function(value, key, iobj) { return key in iobj; };
+      obj = Object(obj);
+    }
+
+    for (let i = 0, length = keys.length; i < length; i++) {
+      const key = keys[i];
+      const value = obj[key];
+
+      if (iteratee(value, key, obj)) result[key] = value;
+    }
+  };
+
+  // 与 pick 方法相反
+  // 返回不能通过 predicate 的副本
+  _.omit = function(obj, iteratee, context) {
+    if (_.isFunction(iteratee)) {
+      iteratee = _.negate(iteratee);
+    } else {
+      const keys = _.map(flatten(arguments, false, false, 1), String);
+      iteratee = function(value, key) {
+        return !_.contains(keys, key);
+      };
+    }
+    return _.pick(obj, iteratee, context);
+  };
+
+  // 和 _.extend 非常类似
+  // 区别是如果 *defaults 中出现了和 object 中一样的键
+  // 则不覆盖 object 的键值对
+  _.defaults = createAssigner(_.allKeys, true);
+
+  // 给定 prototype
+  // 以及一些 own properties
+  // 构造一个新的对象并返回
+  _.create = function(prototype, props) {
+    const result = baseCreate(prototype);
+
+    if (props) {
+      _.extendOwn(result, props);
+    }
+
+    return result;
+  };
+
+  // 对象的浅复制
+  _.clone = function(obj) {
+    if (!_.isObject(obj)) return obj;
+
+    return _.isArray(obj) ? obj.slice() : _.extend({}, obj);
+  };
+
+  // 在链式调用中处理中间值
+  _.tap = function(obj, interceptor) {
+    interceptor(obj);
+    return obj;
+  };
+
+  // 判断对象中是否有 attrs 中的所有键值对
+  _.isMatch = function(object, attrs) {
+    const keys = _.keys(attrs);
+    const length = keys.length;
+
+    if (!object) return !length;
+
+    const obj = Object(object);
+
+    for (let i = 0; i < length; i++) {
+      const key = keys[i];
+
+      if (attrs[key] !== obj[key] || !(key in obj)) return false;
+    }
+
+    return true;
+  };
 }
