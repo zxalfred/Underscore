@@ -828,6 +828,9 @@
     return bound;
   };
 
+
+  // 返回一个方法
+  // prefill 一些参数
   _.partial = function(func, ...boundArgs) {
     const bound = function(...fillArgs) {
       let position = 0;
@@ -862,4 +865,184 @@
 
     return obj;
   };
+
+  // 记忆存储中间运算结果，提高效率
+  // 如果传入 hasher,则用其计算key
+  // 否则用 key 参数直接当key
+  _.memoize = function(func, hasher) {
+    const memoize = function(...args) {
+      const cache = memoize.cache;
+
+      const address = `${hasher ? hasher.apply(this, args) : args[0]}`;
+
+      if (!_.has(cache, address)) {
+        cache[address] = func.apply(this, ...args);
+      }
+
+      return cache[address];
+    };
+
+    memoize.cache = {};
+
+    return memoize;
+  };
+
+  // 延迟触发方法
+  _.delay = function(func, wait, ...args) {
+    return setTimeout(() => func(...args), wait);
+  };
+
+  // 延迟触发，wait 设置为 1
+  _.defer = _.partial(_.delay, _, 1);
+
+  // 函数节流
+  // 如果 options 参数传入 {leading: false}
+  // 那么不会马上触发（等待 wait milliseconds 后第一次触发 func）
+  // 如果 options 参数传入 {trailing: false}
+  // 那么最后一次回调不会被触发
+  // **Notice: options 不能同时设置 leading 和 trailing 为 false**
+  _.throttle = function(func, wait, options) {
+    let context;
+    let result;
+    let args;
+    let timeout = null;
+    let previous = 0;
+
+    if (!options) options = {};
+
+    const later = function() {
+      previous = options.leading === false ? 0 : _.now();
+      timeout = null;
+      result = func.apply(context, args);
+      if (!timeout) {
+        args = null;
+        context = null;
+      }
+    };
+    return function(...rest) {
+      const now = _.now;
+      if (!previous && options.leading === false) previous = now;
+      const remaining = wait - (now - previous);
+      context = this;
+      args = rest;
+      if (remaining < 0 || remaining > wait) {
+        if (timeout) {
+          clearTimeout(timeout);
+          timeout = null;
+        }
+        previous = now;
+        result = func.apply(context, args);
+        if (!timeout) {
+          args = null;
+          context = null;
+        } else if (!timeout && options.trailing !== false) {
+          timeout = setTimeout(later, remaining);
+        }
+      }
+      return result;
+    };
+  };
+
+  // 函数去抖(连续触发事件结束后，只执行一次)
+  _.debounce = function(func, wait, immediate) {
+    let timeout;
+    let args;
+    let context;
+    let timestamp;
+    let result;
+
+    const later = function() {
+      const last = _.now() - timestamp;
+
+      if (last < wait && last >= 0) {
+        timeout = setTimeout(later, wait - last);
+      } else {
+        timeout = null;
+        if (!immediate) {
+          result = func.apply(context, args);
+          if (!timeout) {
+            args = null;
+            context = null;
+          }
+        }
+      }
+    };
+
+    return function(...rest) {
+      context = this;
+      args = rest;
+      timestamp = _.now();
+      const callNow = immediate && !timeout;
+      if (!timeout) timeout = setTimeout(later, wait);
+      if (callNow) {
+        result = func.apply(context, args);
+        args = null;
+        context = null;
+      }
+      return result;
+    };
+  };
+
+  // 将 func 作为参数预先填充入 wrapper
+  _.wrap = function(func, wrapper) {
+    return _.partial(wrapper, func);
+  };
+
+  // 返回一个 predicate 方法的对立方法
+  _.negate = function(predicate) {
+    return function(...args) {
+      return !predicate.apply(this, args);
+    };
+  };
+
+  // 返回一个由一系列函数构成的函数
+  // 每个函数将后面函数的返回值作为参数
+
+  _.compose = function(...args) {
+    const start = args.length - 1; // 倒序调用
+
+    return function(...rest) {
+      let i = start;
+      let result = args[start].apply(this, rest);
+      while (i--) {
+        result = args[i].call(this, result);
+      }
+      return result;
+    };
+  };
+
+  // 当这个函数第 times 被执行时
+  // 触发 func 方法
+  _.after = function(times, func) {
+    return function(args) {
+      if (--times < 1) {
+        return func.apply(this, args);
+      }
+    };
+  };
+
+  // 函数最多被调用 times - 1 次
+  _.before = function(times, func) {
+    let memo;
+    return function(...args) {
+      if (--times > 0) {
+        memo = func.apply(this, args);
+      }
+
+      if (times <= 1) func = null;
+
+      return memo;
+    };
+  };
+
+  // 函数只被执行一次
+  _.once = _.partial(_.before, 2);
+
+  // 对象的扩展方法
+
+  // 判断是否在 IE < 9 下
+  const hasEnumBug = !{}.propertyIsEnumerable.call({ toString: null }, 'toString');
+
+  // 在 IE < 9 下不能用 for...in 来枚举的 key
+  const nonEnumerableProps = ['valueOf', 'isPrototypeOf', 'toString', 'propertyIsEnumerable', 'hasOwnProperty', 'toLocaleString'];
 }
