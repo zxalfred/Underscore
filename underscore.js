@@ -1,4 +1,4 @@
-{
+(function() {
   // 基本配置
   // 建立 root 对象,浏览器中为 window,服务端为 exports
   const root = this;
@@ -1377,4 +1377,73 @@
 
     return _.keys(obj).length === 0;
   };
-}
+
+  // 判断是否为 DOM 元素
+  _.isElement = function(obj) {
+    return !!(obj && obj.nodeType === 1);
+  };
+
+  // 判断是否为数组
+  _.isArray = nativeIsArray || function(obj) {
+    return toString.call(obj) === '[object Array]';
+  };
+
+  // 判断是否为对象
+  // 包含 function 和 object
+  _.isObject = function(obj) {
+    const type = typeof obj;
+    return type === 'function' || (type === 'object' && !!obj);
+  };
+
+  // 其他类型判断
+  _.each(['Arguments', 'Function', 'String', 'Number', 'Date', 'RegExp', 'Error'], (name) => {
+    _[`is${name}`] = function(obj) {
+      return toString.call(obj) === `[object ${name}]`;
+    };
+  });
+
+  // 解决 _.isArguments 在 IE < 9 下的兼容
+  if (!_.isArguments(arguments)) {
+    _.isArguments = function(obj) {
+      return _.has(obj, 'callee');
+    };
+  }
+
+  // 解决 isFunction 在老的 v8 引擎下的兼容
+  const nodelist = root.document && root.document.childNodes;
+  if (typeof /./ !== 'function' && typeof Int8Array !== 'object' && typeof nodelist !== 'function') {
+    _.isFunction = function(obj) {
+      return typeof obj === 'function' || false;
+    };
+  }
+
+  // 判断是否是有限的数字
+  _.isFinite = function(obj) {
+    return Number.isFinite(obj) && !Number.isNaN(parseFloat(obj));
+  };
+
+  // 是否为 NaN
+  _.isNaN = function(obj) {
+    return _.isNumber(obj) && Number.isNaN(obj);
+  };
+
+  // 判断是否为布尔值
+  _.isBoolean = function(obj) {
+    return obj === true || obj === false || toString.call(obj) === '[object Boolean]';
+  };
+
+  // 判断是否是 null
+  _.isNull = function(obj) {
+    return obj === null;
+  };
+
+  // 判断是否为 undefined
+  _.isUndefined = function(obj) {
+    return obj === void 0;
+  };
+
+  // 判断对象中是否有指定的 key
+  _.has = function(obj, key) {
+    return obj != null && hasOwnProperty.call(obj, key);
+  };
+}.call(this));
