@@ -42,6 +42,7 @@ module.exports = {
       "no-restricted-syntax": [0],
       "guard-for-in": [0],
       "prefer-rest-params": [0],
+      "no-self-compare": [0],
     }
   }
   

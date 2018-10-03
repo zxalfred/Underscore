@@ -1261,4 +1261,120 @@
 
     return true;
   };
+
+  // 内部的递归比较函数
+  const eq = function(a, b, aStack, bStack) {
+    // 0 和 -0 被认为不相等
+    // undefined 和 undefined
+    // null 和 null 被认为不相等
+    if (a === b) return a !== 0 || 1 / a === 1 / b;
+
+    // 若 a 和 b 中有一个 null 或 undefined
+    if (a == null || b == null) return false;
+
+    // 若 a 和 b 是underscore OOP 的对象
+    // 那么比较 _wrapped 属性值
+    if (a instanceof _) a = a._wrapped;
+    if (b instanceof _) b = b._wrapped;
+
+    // 用 Object.prototype.toString.call 获取变量的类型
+    const className = toString.call(a);
+
+    // a 和 b 类型不同,直接返回 false
+    if (className !== toString.call(b)) return false;
+
+    switch (className) {
+      // 正则表达式强制转化为字符串进行比较
+      case '[object RegExp]':
+      case '[object String]': {
+        return `${a}` === `${b}`;
+      }
+      case '[object Number]': {
+        // NaN 与 NaN 相等
+        if (+a !== +a) return +b !== +b;
+        return +a === 0 ? 1 / +a === 1 / b : +a === +b;
+      }
+      case '[object Date]':
+      case '[object Boolean]': {
+        return +a === +b;
+      }
+    }
+
+    // 判断 a 是否为数组
+    const areArrays = className === '[object Array]';
+
+    if (!areArrays) {
+      if (typeof a !== 'object' || typeof b !== 'object') return false;
+    }
+
+    // 若同时拥有构造函数,且构造函数不同
+    // 直接返回 false
+    // 排除不同 iframe 构造函数不同的情况
+    // （）33333333333333
+    const aCtor = a.constructor;
+    const bCtor = b.constructor;
+    if (aCtor !== bCtor && !(_.isFunction(aCtor) && aCtor instanceof aCtor
+    && _.isFunction(bCtor) && bCtor instanceof bCtor)
+    && ('constructor' in a && 'constructor' in b)) {
+      return false;
+    }
+
+    aStack = aStack || [];
+    bStack = bStack || [];
+
+    let length = aStack.length;
+
+    while (length--) {
+      // 堆栈中为待判断的 array 或 object
+      // 若堆栈中已经有了 a 则退出接下来的步骤
+      // 防止循环对象的迭代陷入死循环
+      if (aStack[length] === a) return bStack[length] === b;
+    }
+
+    aStack.push(a);
+    bStack.push(b);
+
+    if (areArrays) {
+      length = a.length;
+
+      if (length !== b.length) return false;
+
+      while (length--) {
+        if (!eq(a[length], b[length], aStack, bStack)) return false;
+      }
+    } else {
+      const keys = _.keys(a);
+      let key;
+      length = keys.length;
+
+      if (_.keys(b).length !== length) return false;
+
+      while (length--) {
+        key = keys[length];
+        if (!(_.has(b, key) && eq(a[key], b[key], aStack, bStack))) return false;
+      }
+    }
+
+    aStack.pop();
+    bStack.pop();
+
+    return true;
+  };
+
+  // 判断是否相等
+  _.isEqual = function(a, b) {
+    return eq(a, b);
+  };
+
+  // 是否是 {}, [], "" 或者 null, undefined
+  _.isEmpty = function(obj) {
+    if (obj == null) return true;
+
+    // 后面的判断条件可以排除 {length: 10}
+    if (isArrayLike(obj) && (_.isArray(obj) || _.isString(obj) || _.isArguments(obj))) {
+      return obj.length === 0;
+    }
+
+    return _.keys(obj).length === 0;
+  };
 }
