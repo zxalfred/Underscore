@@ -44,10 +44,11 @@
   if (typeof exports !== 'undefined') {
     if (typeof module !== 'undefined' && module.exports) {
       module.exports = _;
-      exports._ = _;
     } else {
-      root._ = _;
+      exports._ = _;
     }
+  } else {
+    root._ = _;
   }
 
   // 内部函数，用于返回传入回调函数的高效版本
@@ -140,7 +141,7 @@
   };
 
   // 此为 JS 中能精确表达的最大数字
-  const MAX_ARRAY_INDEX = (2 ** 53) - 1;
+  const MAX_ARRAY_INDEX = Math.exp(2, 53) - 1;
 
   // 获取 array 以及 arrayLike 元素的 length 属性值
   const getLength = property('length');
@@ -1446,4 +1447,185 @@
   _.has = function(obj, key) {
     return obj != null && hasOwnProperty.call(obj, key);
   };
+
+  // 工具类方法
+  _.identity = function(value) {
+    return value;
+  };
+
+  _.constant = function(value) {
+    return function() {
+      return value;
+    };
+  };
+
+  _.noop = function() {};
+
+  _.property = property;
+
+  _.propertyOf = function(obj) {
+    return !obj ? function() {} : function(key) {
+      return obj[key];
+    };
+  };
+
+  // 判断一个给定的对象是否有某些键值对
+  _.matcher = _.matches = function(attrs) {
+    attrs = _.extendOwn({}, attrs);
+    return function(obj) {
+      return _.isMatch(obj, attrs);
+    };
+  };
+
+  // 执行某函数 n 次
+  // 将每次执行的结果记录在数组中,最后返回
+  _.times = function(n, iteratee, context) {
+    const accum = Array(Math.max(0, n));
+    iteratee = optimizeCb(iteratee, context, 1);
+    for (let i = 0; i < n; i++) {
+      accum[i] = iteratee(i);
+    }
+    return accum;
+  };
+
+  // 返回一个 [min, max] 范围内的随机整数
+  _.random = function(min, max) {
+    if (!max) {
+      max = min;
+      min = 0;
+    }
+    return min + Math.floor(Math.random() * (max - min + 1));
+  };
+
+  // 返回当前时间戳
+  _.now = Date.now || function() {
+    return new Date().getTime();
+  };
+
+  // HTML 实体编码列表
+  // 用于转码
+  const escapeMap = {
+    '&': '&amp;',
+    '<': '&lt;',
+    '>': '&gt;',
+    '"': '&quot;',
+    "'": '&#x27;',
+    '`': '&#x60;',
+  };
+
+  // 键值对对调
+  // 用于解码
+  const unescapeMap = _.invert(escapeMap);
+
+  // 用于编码或解码的函数
+  const createEscaper = function(map) {
+    const escaper = function(match) {
+      return map[match];
+    };
+
+    const source = `(?:${_.keys(map).join('|')})`;
+
+    const testRegexp = RegExp(source);
+
+    const replaceRegexp = RegExp(source, 'g');
+    return function(string) {
+      string = !string ? '' : `${string}`;
+      return testRegexp.test(string) ? string.replace(replaceRegexp, escaper) : string;
+    };
+  };
+
+  // 编码函数
+  _.escape = createEscaper(escapeMap);
+
+  // 解码函数
+  _.unescape = createEscaper(unescape);
+
+  // 若 oProperty 属性值为函数
+  // 则使用 object 作文上下文执行它
+  // 否则返回之
+  _.result = function(object, oProperty, fallback) {
+    let value = object == null ? void 0 : object[oProperty];
+    if (value === void 0) {
+      value = fallback;
+    }
+    return _.isFunction(value) ? value.call(object) : value;
+  };
+
+  // 生成客户端临时的 DOM ids
+  let idCounter = 0;
+  _.uniqueId = function(prefix) {
+    const id = `${++idCounter}`;
+    return prefix ? prefix + id : id;
+  };
+
+  _.chain = function(obj) {
+    const instance = _(obj);
+    instance._chain = true;
+    return instance;
+  };
+
+  // OOP
+  // 如果 _ 被当做方法调用，则返回一个被包装过的对象
+  // 该对象能使用 underscore 的所用方法并支持链式调用
+
+  const result = function(instance, obj) {
+    // 如果需要链式操作，则对 obj 运行 _.chain 方法
+    return instance._chain ? _(obj).chain() : obj;
+  };
+
+  // 向 underscore 函数库扩展自己的方法
+  _.mixin = function(obj) {
+    _.each(_.functions(obj), (name) => {
+      const func = _[name] = obj[name];
+
+      _.prototype[name] = function() {
+        // 获取被保存在 _wrapped 中的原对象
+        const args = [this._wrapped];
+        push.apply(args, arguments);
+        // 执行 func 方法
+        // 支持链式操作
+        return result(this, func.apply(_, args));
+      };
+    });
+  };
+
+  // 将定义在 _ 函数上的方法加到 prototype 上
+  _.mixin(_);
+
+  _.each(['pop', 'push', 'reverse', 'shift', 'sort', 'splice', 'unshift'], (name) => {
+    const method = ArrayProto[name];
+    _.prototype[name] = function() {
+      const obj = this._wrapped;
+      method.apply(obj, arguments);
+
+      if ((name === 'shift' || name === 'splice') && obj.length === 0) { delete obj[0]; }
+
+      // 支持链式操作
+      return result(this, obj);
+    };
+  });
+
+
+  // 添加 concat、join、slice 等数组原生方法给 Underscore
+  _.each(['concat', 'join', 'slice'], (name) => {
+    const method = ArrayProto[name];
+    _.prototype[name] = function() {
+      return result(this, method.apply(this._wrapped, arguments));
+    };
+  });
+
+  _.prototype.value = function() {
+    return this._wrapped;
+  };
+
+  _.prototype.valueOf = _.prototype.toJSON = _.prototype.value;
+
+  _.prototype.toString = function() {
+    return `${this._wrapped}`;
+  };
+
+  // 兼容 AMD 规范
+  if (typeof define === 'function' && define.amd) {
+    define('underscore', [], () => _);
+  }
 }.call(this));
